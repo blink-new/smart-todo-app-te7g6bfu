@@ -38,6 +38,19 @@ const priorities = [
   { id: 'high', name: 'High', color: 'bg-red-100 text-red-800' }
 ]
 
+function ensureArray<T>(response: unknown, fallback: T[] = []): T[] {
+  if (Array.isArray(response)) return response as T[]
+  if (response && typeof response === 'object') {
+    // @ts-expect-error index signature
+    if (Array.isArray((response as any).data)) return (response as any).data as T[]
+    // Try to find first array value property
+    for (const value of Object.values(response as Record<string, unknown>)) {
+      if (Array.isArray(value)) return value as T[]
+    }
+  }
+  return fallback
+}
+
 function App() {
   const [todos, setTodos] = useState<Todo[]>([])
   const [user, setUser] = useState<{ id: string; email: string } | null>(null)
@@ -108,11 +121,16 @@ function App() {
   const loadTodos = async () => {
     try {
       setIsLoading(true)
-      const todoList = await blink.db.todos.list({
+      const response = await blink.db.todos.list({
         where: { user_id: user.id },
         orderBy: { created_at: 'desc' }
       })
-      setTodos(todoList)
+      const todoArray = ensureArray<Todo>(response)
+      // Filter out invalid records missing id
+      const validArray = todoArray.filter(t => typeof t.id === 'string' && t.id.trim() !== '')
+      // Remove potential duplicates by id
+      const uniqueArray = Array.from(new Map(validArray.map((t) => [t.id, t])).values())
+      setTodos(uniqueArray)
     } catch (error) {
       console.error('Error loading todos:', error)
       toast.error('Failed to load todos')
@@ -136,7 +154,7 @@ function App() {
 
       const id = crypto.randomUUID()
 
-      const todo = await blink.db.todos.create({
+      await blink.db.todos.create({
         id,
         title: newTodo,
         description: newDescription,
@@ -147,10 +165,25 @@ function App() {
         created_at: new Date().toISOString()
       })
 
-      setTodos(prev => [todo, ...prev])
+      const createdTodo: Todo = {
+        id,
+        title: newTodo,
+        description: newDescription,
+        category: category as Todo['category'],
+        priority: priority as Todo['priority'],
+        completed: false,
+        user_id: user.id,
+        created_at: new Date().toISOString()
+      }
+
+      // Add to state while ensuring uniqueness
+      setTodos(prev => {
+        const withoutDuplicate = ensureArray<Todo>(prev).filter(t => t.id !== createdTodo.id)
+        return [createdTodo, ...withoutDuplicate]
+      })
       setNewTodo('')
       setNewDescription('')
-      
+
       toast.success(`Todo added and auto-categorized as ${category}!`)
     } catch (error) {
       console.error('Error adding todo:', error)
@@ -162,6 +195,7 @@ function App() {
 
   // Toggle todo completion
   const toggleTodo = async (id: string, completed: boolean) => {
+    if (!id) return
     try {
       await blink.db.todos.update(id, { completed })
       setTodos(prev => prev.map(todo => 
@@ -187,7 +221,8 @@ function App() {
   }
 
   // Filter todos
-  const filteredTodos = todos.filter(todo => {
+  const safeTodos = Array.isArray(todos) ? todos : []
+  const filteredTodos = safeTodos.filter((todo: Todo) => {
     const matchesSearch = todo.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          todo.description.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === 'all' || todo.category === selectedCategory
@@ -195,9 +230,9 @@ function App() {
   })
 
   // Get stats
-  const completedCount = todos.filter(todo => Number(todo.completed) > 0).length
-  const totalCount = todos.length
-  const highPriorityCount = todos.filter(todo => todo.priority === 'high' && !(Number(todo.completed) > 0)).length
+  const completedCount = safeTodos.filter((todo: Todo) => Number(todo.completed) > 0).length
+  const totalCount = safeTodos.length
+  const highPriorityCount = safeTodos.filter((todo: Todo) => todo.priority === 'high' && !(Number(todo.completed) > 0)).length
 
   // Auth state management
   useEffect(() => {
@@ -232,6 +267,13 @@ function App() {
       `).catch(console.error)
     }
   }, [user])
+
+  // Ensure todos state is always an array
+  useEffect(() => {
+    if (!Array.isArray(todos)) {
+      setTodos([])
+    }
+  }, [todos])
 
   if (!user) {
     return (
