@@ -192,9 +192,9 @@ function App() {
   })
 
   // Get stats
-  const completedCount = todos.filter(todo => todo.completed).length
+  const completedCount = todos.filter(todo => Number(todo.completed) > 0).length
   const totalCount = todos.length
-  const highPriorityCount = todos.filter(todo => todo.priority === 'high' && !todo.completed).length
+  const highPriorityCount = todos.filter(todo => todo.priority === 'high' && !(Number(todo.completed) > 0)).length
 
   // Auth state management
   useEffect(() => {
@@ -417,19 +417,19 @@ function App() {
                     transition={{ duration: 0.2 }}
                   >
                     <Card className={`transition-all duration-200 hover:shadow-md ${
-                      todo.completed ? 'opacity-60 bg-gray-50' : ''
+                      Number(todo.completed) > 0 ? 'opacity-60 bg-gray-50' : ''
                     }`}>
                       <CardContent className="p-6">
                         <div className="flex items-start gap-4">
                           <Checkbox
-                            checked={todo.completed}
+                            checked={Number(todo.completed) > 0}
                             onCheckedChange={(checked) => toggleTodo(todo.id, checked as boolean)}
                             className="mt-1"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-2">
                               <h3 className={`font-medium ${
-                                todo.completed ? 'line-through text-gray-500' : 'text-gray-900'
+                                Number(todo.completed) > 0 ? 'line-through text-gray-500' : 'text-gray-900'
                               }`}>
                                 {todo.title}
                               </h3>
@@ -440,7 +440,7 @@ function App() {
                             
                             {todo.description && (
                               <p className={`text-sm mb-3 ${
-                                todo.completed ? 'line-through text-gray-400' : 'text-gray-600'
+                                Number(todo.completed) > 0 ? 'line-through text-gray-400' : 'text-gray-600'
                               }`}>
                                 {todo.description}
                               </p>
