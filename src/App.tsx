@@ -134,7 +134,10 @@ function App() {
         prioritizeTodo(newTodo, newDescription)
       ])
 
+      const id = crypto.randomUUID()
+
       const todo = await blink.db.todos.create({
+        id,
         title: newTodo,
         description: newDescription,
         category,
